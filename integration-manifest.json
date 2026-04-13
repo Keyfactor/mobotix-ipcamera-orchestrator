@@ -1,0 +1,81 @@
+{
+  "$schema": "https://keyfactor.github.io/v2/integration-manifest-schema.json",
+  "integration_type": "orchestrator",
+  "name": "Mobotix IP Camera",
+  "status": "pilot",
+  "support_level": "kf-supported",
+  "release_dir": "MobotixIPCamera\\bin\\Release",
+  "release_project":"MobotixIPCamera\\MobotixIPCamera.csproj",
+  "update_catalog": true,
+  "link_github": true,
+  "description": "The Mobotix IP Camera Orchestrator Extension is used to inventory and enroll a camera's web server certificate.",
+  "short_description": "The Mobotix IP Camera Orchestrator Extension is used to inventory and enroll a camera's web server certificate.",
+  "about": {
+    "orchestrator": {
+      "UOFramework": "25.4",
+      "keyfactor_platform_version": "25.4",
+      "pam_support": true,
+      "store_types": [
+        {
+          "Name": "Mobotix IP Camera",
+          "ShortName": "MobotixIPCamera",
+          "Capability": "MobotixIPCamera",
+          "ServerRequired": true,
+          "BlueprintAllowed": false,
+          "PowerShell": false,
+          "CustomAliasAllowed": "Required",
+          "PrivateKeyAllowed": "Forbidden",
+          "SupportedOperations": {
+            "Add": false,
+            "Create": false,
+            "Discovery": false,
+            "Enrollment": true,
+            "Remove": true
+          },
+          "PasswordOptions": {
+            "EntrySupported": false,
+            "StoreRequired": false,
+            "Style": "Default"
+          },
+          "Properties": [
+            {
+              "Name": "ServerUsername",
+              "DisplayName": "Server Username",
+              "Type": "Secret",
+              "DependsOn": "",
+              "DefaultValue": "",
+              "Required": true,
+              "Description": "Enter the username of the configured \"service\" user on the camera"
+            },
+            {
+              "Name": "ServerPassword",
+              "DisplayName": "Server Password",
+              "Type": "Secret",
+              "DependsOn": "",
+              "DefaultValue": "",
+              "Required": true,
+              "Description": "Enter the password of the configured \"service\" user on the camera"
+            },
+            {
+              "Name": "ServerUseSsl",
+              "DisplayName": "Use SSL",
+              "Type": "Bool",
+              "DependsOn": "",
+              "DefaultValue": "true",
+              "Required": true,
+              "Description": "Select True or False depending on if SSL (HTTPS) should be used to communicate with the camera. This should always be \"True\""
+            }
+          ],
+          "EntryParameters": [
+          ],
+          "ClientMachineDescription": "The IP address of the Camera. Sample is \"192.167.231.174:44444\". Include the port if necessary.",
+          "StorePathDescription": "Enter the Serial Number of the camera e.g. `0b7c3d2f9e8a`",
+          "StorePathType": "",
+          "StorePathValue": "",
+          "JobProperties": []
+        }
+      ]
+    }
+  }
+}
+
