@@ -5,16 +5,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions
 // and limitations under the License.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
-
 using Newtonsoft.Json;
 
 namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Model
 {
-    /* HTTP Result from /config/camera/media --- Used to capture results from Download Endpoint */
+    /* Model for HTTP Result from /config/camera/media --- Used to capture results from Download Endpoint */
     public class CameraMediaCertResult
     {
         public bool HasCertificate { get; set; }
@@ -41,7 +43,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Model
 
     public class HTTPResponseParser
     {
-        public static CameraMediaCertResult ParseDownloadResponse(byte[] rawBytes)
+        public static CameraMediaCertResult ParseDownloadResponse(byte[] rawBytes, string baseRestClientUrl = "")
         {
             var raw = Encoding.UTF8.GetString(rawBytes);
             var certResult = new CameraMediaCertResult();
@@ -62,7 +64,8 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Model
             // Extract cert chain, if present
             if (certResult.HasCertificate)
             {
-                // Extract each certificate into separate strings
+                // Use cert returned from API ---
+                // Extract each certificate in the chain into separate strings
                 var matches = Regex.Matches(
                     raw,
                     "-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----",
@@ -73,10 +76,53 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Model
             }
             else
             {
-                certResult.CertChain = [];
+                // Fallback to TLS
+                /*var tlsCert = GetTlsCertificate(baseRestClientUrl);
+
+                if (tlsCert != null)
+                {
+                    certResult.CertChain = new List<string> { ExportToPem(tlsCert) };
+                }
+
+                certResult.HasCertificate = true;*/
             }
             
             return certResult;
         }
+
+        /*public static X509Certificate2 GetTlsCertificate(string url)
+        {
+            X509Certificate2 capturedCert = null;
+
+            var handler = new HttpClientHandler();
+
+            handler.ServerCertificateCustomValidationCallback = (request, cert, chain, errors) =>
+            {
+                // Capture the certificate from TLS handshake
+                if (cert != null)
+                {
+                    capturedCert = new X509Certificate2(cert);
+                }
+
+                // Always return true to allow the connection to proceed 
+                // Allow self-signed / invalid certs
+                return true;
+            };
+                
+            using var client = new HttpClient(handler);
+
+            try
+            {
+                // Trigger TLS handshake
+                client.GetAsync(url).Wait();
+            }
+            catch 
+            {
+                // Even if request fails, cert may still be captured
+            }
+            
+            return capturedCert;
+        }*/
+
     }
 }

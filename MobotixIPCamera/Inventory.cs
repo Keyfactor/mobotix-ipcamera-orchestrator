@@ -64,7 +64,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
                         }
                         catch 
                         {
-                            _logger.LogWarning($"Could not fetch the client certificate: {c?.Alias} associated with description {c?.CertChainAsPem}.");
+                            _logger.LogWarning($"Could not fetch the client certificate: {c?.Alias} associated with description {c?.CertChainAsPem.ToString()}.");
                             warningFlag = true;
                             return new CurrentInventoryItem();
                         }
