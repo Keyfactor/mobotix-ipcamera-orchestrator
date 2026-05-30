@@ -129,13 +129,13 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
         /// </summary>
         /// <returns>CertificateData object</returns>
         public CertificateData ListCertificates()
-        {
+        {  
+            Logger.MethodEntry();
+            
             var certsFound = new CertificateData();
             
             try
             {
-                Logger.MethodEntry();
-
                 var getCertsResource = $"config/camera/media";
                 var queryParameters = new Dictionary<string, string> { { "file", "httpd_cert.pem" } };
                 var httpResponse = ExecuteHttp(getCertsResource, Method.Get, queryParameters);
@@ -182,14 +182,65 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                     }
                 }
                 
+                Logger.MethodExit();
+                
                 return certsFound;
             }
             catch (Exception e)
             {
                 Logger.LogError("Error retrieving client certificates on device: " + LogHandler.FlattenException(e));
-                throw new Exception(e.Message);
+                throw;
             }
-        } 
+        }
+
+        public void UploadPemFile(string pemContent, string fileName)
+        {
+            Logger.MethodEntry();
+
+            try
+            {
+                var postCertResource = $"config/camera/media";
+                var request = new RestRequest(postCertResource, Method.Post);
+                
+                // Matches curl -F in API calls
+                request.AlwaysMultipartFormData = true;
+                
+                Logger.LogDebug($"Preparing mutlipart/form-data upload for file {fileName}");
+                
+                var bytes = Encoding.UTF8.GetBytes(pemContent);
+                request.AddFile(
+                    name: "some-file",
+                    bytes: bytes,
+                    fileName: fileName,
+                    contentType: "application/octet-stream"
+                );
+
+                Logger.LogTrace($"Executing upload request for {fileName}");
+                var httpResponse = ExecuteHttp(request);
+                
+                // Decode the HTTP response if failed
+                if (httpResponse is {IsSuccessful:false})
+                {
+                    Logger.LogError($"HTTP Request unsuccessful - HTTP Response: {DecodeHttpStatus(httpResponse)}");
+                    throw new Exception($"HTTP Request unsuccessful.");
+                }
+                
+                // Decode the API response when HTTP response is successful
+                if (httpResponse != null && string.IsNullOrEmpty(httpResponse.Content))
+                {
+                    throw new Exception("No content returned from HTTP Response");
+                }
+                
+                Logger.LogInformation("Certificate upload completed successfully");
+                
+                Logger.MethodExit();
+            }
+            catch (Exception e)
+            {
+                Logger.LogError("Error uploading client certificate to device: " + LogHandler.FlattenException(e));
+                throw;
+            }
+        }
         
         private RestResponse ExecuteHttp(string resource, Method httpMethod, Dictionary<string, string>? queryParams = null)
         {
@@ -227,6 +278,55 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                 Logger.LogTrace("HTTP Request completed");
 
                 Logger.LogDebug($"HTTP Response: {httpResponse?.Content}");
+                var raw = Encoding.UTF8.GetString(httpResponse.RawBytes);
+                Logger.LogDebug($"FULL RESPONSE: {raw}");
+
+                Logger.MethodExit();
+
+                return httpResponse;
+            }
+            catch (Exception e)
+            {
+                Logger.LogError($"Error Occured in MobotixRestClient.ExecuteHttp: {LogHandler.FlattenException(e)}");
+                throw;
+            }
+        }
+        
+        private RestResponse ExecuteHttp(RestRequest request)
+        {
+            Logger.MethodEntry();
+
+            try
+            {
+                // Check if the HTTP client was properly initialized
+                if (_httpClient is null)
+                {
+                    throw new Exception("Mobotix IP Camera HTTP Client was not initialized.");
+                }
+
+                Logger.LogDebug($"HTTP Request URI: {_httpClient.BuildUri(request)}");
+                Logger.LogDebug($"HTTP Method: {request.Method.ToString()}");
+
+                Logger.LogTrace("Executing REST Request...");
+                var httpResponse = _httpClient.Execute(request);
+                if (httpResponse is null)
+                {
+                    throw new InvalidOperationException();
+                }
+
+                Logger.LogTrace("HTTP Request completed");
+                Logger.LogDebug($"HTTP Response: {httpResponse?.Content}");
+                var raw = Encoding.UTF8.GetString(httpResponse.RawBytes);
+                
+                var lines = raw.Split(
+                    new[] { "\r\n", "\n" },
+                    StringSplitOptions.None);
+
+                Logger.LogDebug($"FULL RESPONSE:");
+                foreach (var line in lines)
+                {
+                    Logger.LogDebug(line);
+                }
 
                 Logger.MethodExit();
 
