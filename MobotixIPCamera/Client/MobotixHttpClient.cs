@@ -193,6 +193,11 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
             }
         }
 
+        /// <summary>
+        /// Posts a PEM file (one for certificate, one for private key) to the device for TLS connections.
+        /// </summary>
+        /// <param name="pemContent">Base-64 encoded certificate or private key contents</param>
+        /// <param name="fileName">Filename to indicate certificate or private key</param>
         public void UploadPemFile(string pemContent, string fileName)
         {
             Logger.MethodEntry();
@@ -202,20 +207,18 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                 var postCertResource = $"config/camera/media";
                 var request = new RestRequest(postCertResource, Method.Post);
                 
-                // Matches curl -F in API calls
-                request.AlwaysMultipartFormData = true;
+                Logger.LogDebug($"Preparing multipart/form-data upload for file {fileName}");
                 
-                Logger.LogDebug($"Preparing mutlipart/form-data upload for file {fileName}");
-                
-                var bytes = Encoding.UTF8.GetBytes(pemContent);
-                request.AddFile(
-                    name: "some-file",
-                    bytes: bytes,
-                    fileName: fileName,
-                    contentType: "application/octet-stream"
-                );
+                var (body, contentType) = BuildMultipart("some_file",fileName,"application/x-x509-ca-cert",pemContent);
 
-                Logger.LogTrace($"Executing upload request for {fileName}");
+                Logger.LogDebug($"Adding request headers: Content-Type: {contentType}; Accept: */*");
+                request.AddHeader("Content-Type", contentType);
+                request.AddHeader("Accept", "*/*");
+                
+                Logger.LogDebug($"Adding request body");
+                request.AddStringBody(body, DataFormat.None);
+                
+                Logger.LogTrace($"Executing upload request for '{fileName}'");
                 var httpResponse = ExecuteHttp(request);
                 
                 // Decode the HTTP response if failed
@@ -231,13 +234,54 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                     throw new Exception("No content returned from HTTP Response");
                 }
                 
-                Logger.LogInformation("Certificate upload completed successfully");
+                Logger.LogInformation($"{fileName} upload completed successfully");
                 
                 Logger.MethodExit();
             }
             catch (Exception e)
             {
                 Logger.LogError("Error uploading client certificate to device: " + LogHandler.FlattenException(e));
+                throw;
+            }
+        }
+        
+        /// <summary>
+        /// Restart the device to apply configuration changes.
+        /// </summary>
+        public void RebootDevice()
+        {  
+            Logger.MethodEntry();
+            
+            try
+            {
+                var postRebootResource = $"admin/rcontrol";
+                var queryParameters = new Dictionary<string, string> { { "action", "reboot" } };
+                var httpResponse = ExecuteHttp(postRebootResource, Method.Post, queryParameters);
+
+                // Decode the HTTP response if failed
+                if (httpResponse is {IsSuccessful:false})
+                {
+                    Logger.LogError($"HTTP Request unsuccessful - HTTP Response: {DecodeHttpStatus(httpResponse)}");
+                    throw new Exception($"HTTP Request unsuccessful.");
+                }
+                
+                // Decode the API response when HTTP response is successful
+                if (httpResponse != null && string.IsNullOrEmpty(httpResponse.Content))
+                {
+                    throw new Exception("No content returned from HTTP Response");
+                }
+                
+                // Parse response
+                if (!httpResponse.Content.Contains("OK - Reboot"))
+                {
+                    throw new Exception("Device did not acknowledge reboot");
+                }
+                
+                Logger.MethodExit();
+            }
+            catch (Exception e)
+            {
+                Logger.LogError("Error rebooting device: " + LogHandler.FlattenException(e));
                 throw;
             }
         }
@@ -278,8 +322,6 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                 Logger.LogTrace("HTTP Request completed");
 
                 Logger.LogDebug($"HTTP Response: {httpResponse?.Content}");
-                var raw = Encoding.UTF8.GetString(httpResponse.RawBytes);
-                Logger.LogDebug($"FULL RESPONSE: {raw}");
 
                 Logger.MethodExit();
 
@@ -315,19 +357,9 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                 }
 
                 Logger.LogTrace("HTTP Request completed");
-                Logger.LogDebug($"HTTP Response: {httpResponse?.Content}");
-                var raw = Encoding.UTF8.GetString(httpResponse.RawBytes);
                 
-                var lines = raw.Split(
-                    new[] { "\r\n", "\n" },
-                    StringSplitOptions.None);
-
-                Logger.LogDebug($"FULL RESPONSE:");
-                foreach (var line in lines)
-                {
-                    Logger.LogDebug(line);
-                }
-
+                Logger.LogDebug($"HTTP Response: {httpResponse?.Content}");
+               
                 Logger.MethodExit();
 
                 return httpResponse;
@@ -396,6 +428,76 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
             Logger.MethodExit();
             
             return codeString;
+        }
+
+        /// <summary>
+        /// Builds a multipart/form-data request body manually.
+        ///
+        /// WHY do this manually:
+        /// 1. RestSharp auto-generates multipart requests, but:
+        /// -- It adds quotes around the boundary (breaks with some devices)
+        /// -- It may format parts differently than expected
+        /// 2. Embedded devices (like cameras) often require VERY STRICT formatting
+        /// 3. This guarantees a byte-for-byte compatible format
+        /// </summary>
+        /// <param name="fieldName"></param>
+        /// <param name="fileName"></param>
+        /// <param name="contentType"></param>
+        /// <param name="content"></param>
+        /// <returns></returns>
+        private (string Body, string ContentType) BuildMultipart(string fieldName, string fileName, string contentType, string pemContent)
+        {
+            Logger.MethodEntry();
+            
+            // Generate a unique boundary string
+            // WHY do this:
+            // 1. Boundary separates parts in multipart payloads
+            // 2. Must be unique so it does not accidentally appear in the file content
+            // 3. Prefix it with dashes for readability and compatibility
+            var boundary = "----------------" + Guid.NewGuid().ToString("N");
+            
+            var body = new StringBuilder();
+            
+            // Start the multipart section
+            // WHY do this:
+            // 1. Every part MUST BEGIN with: --<boundary>
+            // 2. This is how the camera knows a new part is starting
+            body.AppendLine($"--{boundary}");
+            
+            // Content-Disposition header defines:
+            // 1. Form field name (must EXACTLY match API expectations)
+            // 2. Filename (some devices validate this)
+            body.AppendLine($"Content-Disposition: form-data; name=\"{fieldName}\"; filename=\"{fileName}\"");
+
+            // Content-Type for THIS part (not the whole request!)
+            // WHY do this:
+            // 1. Tells the camera what kind of file this is
+            // 2. The Mobotix camera requires a specific value (e.g. application/x-x509-ca-cert)
+            body.AppendLine($"Content-Type: {contentType}");
+
+            // VERY IMPORTANT: Blank line between headers and content
+            // WHY do this:
+            // 1. Required by HTTP spec
+            // 2. Signals end of headers, start of body
+            // 3. Missing this will cause the device to ignore the file silently
+            body.AppendLine();
+
+            // Actual file content (PEM)
+            // WHY do this:
+            // 1. This is what the camera will process as the uploaded file
+            // 2. Should not be altered or reformatted
+            body.AppendLine(pemContent);
+
+            // End the multipart section
+            // WHY do this:
+            // 1. "--boundary--" indicates FINAL boundary (end of request body; remember NO QUOTES)
+            // 2. Without this, server may treat request as incomplete
+            body.AppendLine($"--{boundary}--");
+            
+            Logger.MethodExit();
+            
+            // Return the body and content type
+            return (body.ToString(), $"multipart/form-data; boundary={boundary}");
         }
     }
 }

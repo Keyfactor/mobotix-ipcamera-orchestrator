@@ -32,7 +32,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
             {
                 string key = NormalizeSanKey(entry.Key);
                 
-                // TODO: Any certificate contraint for Mobotix TLS cert, put here ---
+                // TODO: Any certificate constraint for Mobotix TLS cert, put here ---
                 if (key is not ("DNS" or "IP"))
                     continue;
                 
@@ -40,7 +40,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
                     continue;
                 
                 // NOTE: We are separating the key and value pairs with a colon because this is the format
-                // required to send SANs to the Axis API endpoint
+                // required to send SANs to the API endpoint
                 parts.AddRange(
                     entry.Value
                         .Where(v => !string.IsNullOrWhiteSpace(v))

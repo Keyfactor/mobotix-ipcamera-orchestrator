@@ -114,6 +114,10 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
                 var x509Cert = submitReenrollment.Invoke(result.CsrPem);
                 
                 _logger.LogTrace($"Exporting PEM bundle with KeyId: {result.KeyId}");
+                if (x509Cert is null)
+                {
+                    throw new Exception("Certificate returned null");
+                }
                 var pemBundle = _csrService.ExportPemBundle(result.KeyId,x509Cert);
                 
                 _logger.LogTrace($"Certificate to Upload: {pemBundle.CertificatePem}");
@@ -131,6 +135,10 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
                 // Upload the certificate to the device
                 _logger.LogTrace("Uploading certificate to device");
                 client.UploadPemFile(pemBundle.CertificatePem, "httpd_cert.pem");
+                
+                // Reboot the device to apply the certificate and private key
+                _logger.LogTrace("Rebooting device to apply changes");
+                client.RebootDevice();
                 
                 _logger.MethodExit();
             }
