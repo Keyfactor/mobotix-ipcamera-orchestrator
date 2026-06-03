@@ -120,10 +120,13 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
                 }
                 var pemBundle = _csrService.ExportPemBundle(result.KeyId,x509Cert);
                 
-                _logger.LogTrace($"Certificate to Upload: {pemBundle.CertificatePem}");
+                #if DEBUG
+                _logger.LogTrace($"Certificate to Upload (Full): {pemBundle.CertificatePem}");
+                #endif
                 
-                // TODO: Remove the logging of private key
-                _logger.LogTrace($"Key to Upload: {pemBundle.PrivateKeyPem}");
+                _logger.LogTrace($"Certificate to Upload (Preview): {pemBundle.CertificatePem[..100]}");
+                
+                _logger.LogTrace($"Private key has been retrieved from memory and will be uploaded to the device");
                 
                 _logger.LogTrace("Create HTTPS client to connect to device");
                 var client = new MobotixHttpClient(config, config.CertificateStoreDetails);

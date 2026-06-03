@@ -83,9 +83,9 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                 // TODO: Remove the username and password logging
                 Logger.LogTrace("Adding Basic Auth Credentials to the HTTP client options...");
                 string username = config.ServerUsername;
-                Logger.LogTrace($"API Username: {username}");
+                //Logger.LogTrace($"API Username: {username}");
                 string password = config.ServerPassword;
-                Logger.LogTrace($"API Password: {password}");
+                //Logger.LogTrace($"API Password: {password}");
                 //string username = PAMUtilities.ResolvePAMField(resolver, Logger, "API Username", config.ServerUsername);
                 //string password = PAMUtilities.ResolvePAMField(resolver, Logger, "API Password", config.ServerPassword);
                 
