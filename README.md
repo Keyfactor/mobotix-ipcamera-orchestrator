@@ -210,6 +210,7 @@ the Keyfactor Command Portal
    Select True or False depending on if SSL (HTTPS) should be used to communicate with the camera. This should always be "True"
 
    ![MobotixIPCamera Custom Field - ServerUseSsl](docsource/images/MobotixIPCamera-custom-field-ServerUseSsl-dialog.svg)
+   ![MobotixIPCamera Custom Field - ServerUseSsl](docsource/images/MobotixIPCamera-custom-field-ServerUseSsl-validation-options-dialog.svg)
 
 
    </details>
