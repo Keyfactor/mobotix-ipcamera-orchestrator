@@ -13,7 +13,7 @@ Since Mobotix cameras do not support on-device key generation, the extension per
 4. Uploading the private key and certificate to the camera via REST API
 5. Rebooting the device to apply the new certificate
 
-This workflow is fully automated.
+This workflow is fully automated. 
 
 ### Use Cases
 
