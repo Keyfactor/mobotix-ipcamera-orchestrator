@@ -1,32 +1,54 @@
 ## Overview
 
-The Sample Orchestrator Store utilizes the SOSApi included in this solution. To utilize SOSApi and download the solution. 
-Build the SOSApi project and use the compiled binary to host the API/Web interface.
+The Mobotix IP Camera Orchestrator extension remotely manages TLS certificates on Mobotix IP Network Cameras (x7 and x8 models). 
+
+This extension provides functionality to:
+- Inventory the TLS certificate used by the camera's web server
+- Enroll and install a new TLS certificate for use by the camera's web server
+
+Since Mobotix cameras do not support on-device key generation, the extension performs certificate enrollment by:
+1. Generating a private key pair in memory on the orchestrator server
+2. Creating and submitting a CSR to Command
+3. Receiving the issued certificate
+4. Uploading the private key and certificate to the camera via REST API
+5. Rebooting the device to apply the new certificate
+
+This workflow is fully automated. 
+
+### Use Cases
+
+#### Supported
+
+1. Inventory of TLS certificate (web server only)
+2. Automated enrollment and installation of TLS certificates
+
+#### Not Supported
+
+1. Upload of certificates outside the enrollment workflow
+2. Removal of certificates from the camera
+3. Management (add/remove) of CA certificates on the device
 
 ## Requirements
 
-The Orchestrator needs to be able to access the IP SOSApi is running under (0.0.0.0/8080 by default).
+1. A Mobotix IP Network Camera (tested on MX-V7.3.5.35)
+2. An account with **Administrator** privileges
+3. Network connectivity from orchestrator to camera over HTTP/HTTPS
 
-## Extension Mechanics
+## Certificate Behavior and Constraints
 
-At present, the secret fields need to be set to some value due to existing bugs in command. 
-The username/password/secret fields need to be set to any value other than empty for jobs to be processed correctly.
-"test" is a good value to use for these fields.
+Due to device limitations:
 
-## Test Cases
+- Only a single TLS certificate is managed per device
+- Certificate and private key are uploaded separately
+- A **device reboot is required** for the certificate to take effect (Handled automatically via the enrollment workflow)
 
-The SOS solution will eventually include a functional test framework. The existing sample framework currently included in the project is out of date and non functional.
+## Post Installation
 
-## Installation
+Work in Progress
 
-The compiled binaries for the Orchestrator Extension itself can be deployed to the extensions folder at the location of the Universal Orchestrator installation. 
+## Caveats
 
-However, to get the most use out of this extension, it is recommended to use the Visual Studio project. You should either install Visual Studio on the machine you run the orchestrator or link the debugger remotely. 
-
-In case you setup Visual Studio locally, you could use a symlink to link the Visual studio output directory to the extensions folder, specifically making a subfolder named "SOS". 
-Once this is done and the code is compiled, you can attach the Visual Studio debugger to the Universal Orchestrator process for efficient debugging and variable inspection. 
-
-The Sample Key Store certificate store type also needs to be added to Keyfactor. The exact settings are available in the install folder in this repository. This extension is configured to automatically log all incoming data it receives from the Universal Orchestrator. The log level needs to be set to at least Debug in the Universal Orchestrator nlog settings for this information to appear in the logs. 
-
-The overview of the Sample Orchestrator Store type is available here:
-* [Sample Orchestrator Store Type](docs/sos.md)
+> [!NOTE]
+> **v1.0.0**
+> - Only one certificate is managed at a time
+> - ODKG/Reenrollment jobs must use the same alias (i.e. "HTTPS") and "Overwrite" must be set to *true* 
