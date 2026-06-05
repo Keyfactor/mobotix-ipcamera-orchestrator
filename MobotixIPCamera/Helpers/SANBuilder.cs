@@ -9,6 +9,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Keyfactor.Logging;
 using Microsoft.Extensions.Logging;
 
 namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
@@ -20,6 +21,10 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
         /// </summary>
         public static List<string> BuildSANList(Dictionary<string, string[]> sans, ILogger logger)
         {
+            logger.MethodEntry();
+            
+            logger.LogTrace($"Building SAN list from dictionary");
+            
             var parts = new List<string>();
             
             if (sans == null || sans.Count == 0)
@@ -47,6 +52,8 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
                         .Select(v => $"{key}:{v.Trim()}")
                 );
             }
+            
+            logger.MethodExit();
 
             return parts;
         }
