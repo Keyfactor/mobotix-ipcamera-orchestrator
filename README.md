@@ -343,7 +343,7 @@ Due to device limitations:
 
 - Only a single TLS certificate is managed per device
 - Certificate and private key are uploaded separately
-- A **device reboot is required** for the certificate to take effect (Handled automatically via the enrollment workflow)
+- A **device reboot is required** for the certificate to take effect (handled automatically via the enrollment workflow)
 
 ## Caveats
 
