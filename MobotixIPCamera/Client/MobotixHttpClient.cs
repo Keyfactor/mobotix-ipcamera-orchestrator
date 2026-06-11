@@ -48,7 +48,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
         private X509Certificate2 _capturedTlsCert;
         
         private ILogger Logger { get; }
-        public MobotixHttpClient(JobConfiguration config, CertificateStore store)
+        public MobotixHttpClient(JobConfiguration config, CertificateStore store, IPAMSecretResolver resolver)
         {
             try
             {
@@ -59,7 +59,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                 Logger.LogTrace("Initializing Mobotix IP Camera HTTP client");
                 
                 // ** NOTE: Ignoring the default config.UseSSL custom field --- we will always connect to the device via HTTPS
-                // TODO: For Testing --- Only use HTTP
+                // TODO: For Testing --- Using HTTPS is required to retrieve the TLS cert
                 _baseRestClientUrl = $"https://{store.ClientMachine}";
                 
                 Logger.LogDebug($"Base HTTP client URL: {_baseRestClientUrl}");
@@ -72,30 +72,30 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                     ServerCertificateCustomValidationCallback =
                         DeviceCertValidator.GetValidator(store.StorePath, errorContext, Logger, cert => _capturedTlsCert = cert)
                 };
-
+                
+                // Add Basic Auth username and password credentials
+                Logger.LogTrace("Adding Basic Auth Credentials to the HTTP client options...");
+                string username = PAMUtilities.ResolvePAMField(resolver, Logger, "API Username", config.ServerUsername);
+                string password = PAMUtilities.ResolvePAMField(resolver, Logger, "API Password", config.ServerPassword);
+                
+                #if DEBUG
+                Logger.LogTrace($"API Username: {username}");
+                Logger.LogTrace($"API Password: {password}");
+                #endif
+                
                 // Initialize HTTP client options with the base URL and custom TLS cert validator
                 options = new RestClientOptions(_baseRestClientUrl)
                 {
-                    ConfigureMessageHandler = _ => handler
+                    ConfigureMessageHandler = _ => handler,
+                    Authenticator = new HttpBasicAuthenticator(username, password),
+                    PreAuthenticate = true // forces auth header on first request
                 };
-
-                // Add Basic Auth username and password credentials
-                // TODO: Remove the username and password logging
-                Logger.LogTrace("Adding Basic Auth Credentials to the HTTP client options...");
-                string username = config.ServerUsername;
-                //Logger.LogTrace($"API Username: {username}");
-                string password = config.ServerPassword;
-                //Logger.LogTrace($"API Password: {password}");
-                //string username = PAMUtilities.ResolvePAMField(resolver, Logger, "API Username", config.ServerUsername);
-                //string password = PAMUtilities.ResolvePAMField(resolver, Logger, "API Password", config.ServerPassword);
-                
-                options.Authenticator = new HttpBasicAuthenticator(username, password);
 
                 // Add SSL validation
                 Logger.LogTrace("Validating connection to the device...");
 
                 _httpClient = new RestClient(options);
-                var request = new RestRequest("/"); // Initiates the TLS handshake to retrieve the server cert
+                var request = new RestRequest("config/camera/media"); // Initiates the TLS handshake to retrieve the server cert
                 var response = _httpClient.Execute(request);
 
                 // Build the list of errors to log to the console
@@ -128,7 +128,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
         /// The contents of that PEM file correspond to the TLS certificate.
         /// </summary>
         /// <returns>CertificateData object</returns>
-        public CertificateData ListCertificates()
+        public CertificateData ListCertificates(string alias)
         {  
             Logger.MethodEntry();
             
@@ -166,7 +166,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                         certChain.Add(c);
                     }
 
-                    certsFound.Certs.Add( new Certificate() {Alias = "HTTPS", CertChainAsPem = certChain} );
+                    certsFound.Certs.Add( new Certificate() {Alias = alias, CertChainAsPem = certChain} );
                 }
                 else
                 {

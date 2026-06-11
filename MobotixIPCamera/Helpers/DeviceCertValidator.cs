@@ -216,7 +216,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
                 }
                 */
 
-                logger.LogInformation("Certificate chain and subject validated!!");
+                logger.LogDebug("Certificate chain and subject validated!!");
                 return true;
             };
         }

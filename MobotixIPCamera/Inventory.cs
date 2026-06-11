@@ -18,18 +18,21 @@ using Keyfactor.Orchestrators.Extensions;
 using Newtonsoft.Json;
 
 using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Model;
+using Keyfactor.Orchestrators.Extensions.Interfaces;
 
 namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
 {
     public class Inventory : IInventoryJobExtension
     {
         private readonly ILogger _logger;
-        
         public string ExtensionName => "";
+
+        public IPAMSecretResolver Resolver;
         
-        public Inventory()
+        public Inventory(IPAMSecretResolver resolver)
         {
             _logger = LogHandler.GetClassLogger<Inventory>();
+            Resolver = resolver;
         }
         
         // Job Entry Point
@@ -47,11 +50,11 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
                 _logger.LogTrace($"Inventory Config: {jsonConfig.Replace(config.ServerPassword,"**********")}");
                 
                 _logger.LogTrace("Create HTTPS client to connect to device");
-                var client = new MobotixHttpClient(config, config.CertificateStoreDetails);
+                var client = new MobotixHttpClient(config, config.CertificateStoreDetails, Resolver);
                 
                 // Perform client cert inventory
                 _logger.LogTrace("Retrieve TLS certificate");
-                CertificateData data = client.ListCertificates();
+                CertificateData data = client.ListCertificates(config.CertificateStoreDetails.StorePath);
                 
                 // Build the list of client certificates and add to the InventoryItems object sent back to Command
                 inventoryItems.AddRange(data.Certs.Select(
@@ -59,7 +62,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
                     {
                         try
                         {
-                            _logger.LogTrace($"Building Client Cert List Inventory Item: {c.Alias} Pem: {c.CertChainAsPem}");
+                            _logger.LogTrace($"Building Client Cert List Inventory Item: {c.Alias} Pem: {c.CertChainAsPem.ToString()}");
                             return BuildInventoryItem(c);
                         }
                         catch 

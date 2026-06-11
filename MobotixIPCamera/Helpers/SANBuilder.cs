@@ -74,7 +74,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
             {
                 string key = NormalizeSanKey(entry.Key);
                 
-                // TODO: Any certificate contraint for Mobotix TLS cert, put here ---
+                // TODO: Any certificate constraint for Mobotix TLS cert, put here ---
                 if (key is not ("DNS" or "IP"))
                     continue;
                 

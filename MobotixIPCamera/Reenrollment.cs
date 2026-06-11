@@ -6,8 +6,6 @@
 // and limitations under the License.
 
 using System;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -17,6 +15,7 @@ using Newtonsoft.Json;
 
 using Keyfactor.Logging;
 using Keyfactor.Orchestrators.Extensions;
+using Keyfactor.Orchestrators.Extensions.Interfaces;
 using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Model;
 using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers;
 using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client;
@@ -31,7 +30,9 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
         
         public string ExtensionName => "";
         
-        public Reenrollment()
+        public IPAMSecretResolver Resolver;
+        
+        public Reenrollment(IPAMSecretResolver resolver)
         {
             // Register services
             var services = new ServiceCollection();
@@ -50,6 +51,8 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
             // Resolve dependencies
             _logger = provider.GetRequiredService<ILogger<Reenrollment>>();
             _csrService = provider.GetRequiredService<CsrService>();
+            
+            Resolver = resolver;
         }
         
         // Job Entry Point
@@ -60,7 +63,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
             try
             {
                 _logger.LogTrace($"Beginning Reenrollment for Client Machine {config.CertificateStoreDetails.ClientMachine}...");
-                string jsonConfig = JsonConvert.SerializeObject(config);
+                string jsonConfig = JsonConvert.SerializeObject(config, Formatting.Indented);
                 _logger.LogDebug($"Reenrollment Config: {jsonConfig.Replace(config.ServerPassword,"**********")}");
                 
                 // Log each key-value pair in the Job Properties for debugging
@@ -91,7 +94,8 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
                 string keyAlgorithm = config.JobProperties["keyType"].ToString() ?? throw new Exception("Key Algorithm returned null");
                 string keySize = config.JobProperties["keySize"].ToString() ?? throw new Exception("Key Size returned null");
                 string subject = config.JobProperties["subjectText"].ToString() ?? throw new Exception("Subject returned null");
-                string newAlias = config.Alias ?? throw new Exception("Alias returned null");
+                string newAlias = config.CertificateStoreDetails.StorePath;
+                
                 _logger.LogDebug($"Alias: {newAlias}");
                 
                 _logger.LogTrace("Create private key pair and generate CSR");
@@ -122,14 +126,14 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
                 
                 #if DEBUG
                 _logger.LogTrace($"Certificate to Upload (Full): {pemBundle.CertificatePem}");
-                #endif
-                
+                #else
                 _logger.LogTrace($"Certificate to Upload (Preview): {pemBundle.CertificatePem[..100]}");
+                #endif
                 
                 _logger.LogTrace($"Private key has been retrieved from memory and will be uploaded to the device");
                 
                 _logger.LogTrace("Create HTTPS client to connect to device");
-                var client = new MobotixHttpClient(config, config.CertificateStoreDetails);
+                var client = new MobotixHttpClient(config, config.CertificateStoreDetails, Resolver);
                 
                 // Upload the private key to the device
                 _logger.LogTrace("Uploading private key to device");
