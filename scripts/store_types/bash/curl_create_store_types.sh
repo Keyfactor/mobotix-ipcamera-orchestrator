@@ -68,6 +68,6 @@ curl -s -X POST "https://${KEYFACTOR_HOSTNAME}/${KEYFACTOR_API_PATH}/Certificate
   "ServerRequired": true,
   "PowerShell": false,
   "BlueprintAllowed": false,
-  "CustomAliasAllowed": "Required"
+  "CustomAliasAllowed": "Forbidden"
 }'
 

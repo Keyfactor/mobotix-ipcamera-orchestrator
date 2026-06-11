@@ -68,7 +68,7 @@ $Body = @'
   "ServerRequired": true,
   "PowerShell": false,
   "BlueprintAllowed": false,
-  "CustomAliasAllowed": "Required"
+  "CustomAliasAllowed": "Forbidden"
 }
 '@
 
