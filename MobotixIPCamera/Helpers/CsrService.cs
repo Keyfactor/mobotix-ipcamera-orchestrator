@@ -6,18 +6,17 @@
 // and limitations under the License.
 
 #nullable enable
+using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Model;
+using Keyfactor.Logging;
 using Microsoft.Extensions.Logging;
-
+using Org.BouncyCastle.OpenSsl;
+using Org.BouncyCastle.Pkcs;
 using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Model;
-using Keyfactor.Logging;
-using Org.BouncyCastle.OpenSsl;
-using Org.BouncyCastle.Pkcs;
 
 /* CsrService.cs
  * ---------------------------------------------------------------------------------------------------
@@ -32,13 +31,13 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
 {
     public class CsrService
     {
-        private readonly ILogger<CsrService> _logger;
+        private readonly ILogger _logger;
         
         // In-memory key store
         private readonly ConcurrentDictionary<string, AsymmetricAlgorithm> _keystore = new();
 
         // Inject logger
-        public CsrService(ILogger<CsrService> logger)
+        public CsrService(ILogger logger)
         {
             _logger = logger;
         }
