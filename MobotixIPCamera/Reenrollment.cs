@@ -5,14 +5,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions
 // and limitations under the License.
 
-using System;
-
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using NLog.Extensions.Logging;
-
-using Newtonsoft.Json;
-
 using Keyfactor.Logging;
 using Keyfactor.Orchestrators.Extensions;
 using Keyfactor.Orchestrators.Extensions.Interfaces;
@@ -20,12 +12,15 @@ using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Model;
 using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers;
 using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client;
 using Keyfactor.Orchestrators.Common.Enums;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using System;
 
 namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
 {
     public class Reenrollment: IReenrollmentJobExtension
     {
-        private readonly ILogger<Reenrollment> _logger;
+        private readonly ILogger _logger;
         private readonly CsrService _csrService;
         
         public string ExtensionName => "";
@@ -34,24 +29,8 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
         
         public Reenrollment(IPAMSecretResolver resolver)
         {
-            // Register services
-            var services = new ServiceCollection();
-            services.AddLogging(builder =>
-            {
-                builder.ClearProviders();
-                builder.SetMinimumLevel(LogLevel.Trace);
-                builder.AddNLog();
-            });
-            
-            services.AddTransient<CsrService>();
-            
-            // Build provider
-            var provider = services.BuildServiceProvider();
-            
-            // Resolve dependencies
-            _logger = provider.GetRequiredService<ILogger<Reenrollment>>();
-            _csrService = provider.GetRequiredService<CsrService>();
-            
+            _logger = LogHandler.GetClassLogger<Reenrollment>();
+            _csrService = new CsrService(_logger);
             Resolver = resolver;
         }
         
