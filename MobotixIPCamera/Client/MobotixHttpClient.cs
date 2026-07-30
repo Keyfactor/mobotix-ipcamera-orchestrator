@@ -413,13 +413,17 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                 default:
                 {
                     codeString = "No response received! Possible causes: Timeouts, no network connectivity, DNS resolution failure, SSL issues, firewall configuration, etc.";
+
+                    codeString += $"\nResponse Status: {httpResponse.ResponseStatus}";
+                    
                     if (!string.IsNullOrEmpty(httpResponse.ErrorMessage))
                     {
                         codeString += $"\nError message: {httpResponse.ErrorMessage}";
                     }
-                    else if (httpResponse.ErrorException != null)
+                    
+                    if (httpResponse.ErrorException != null)
                     {
-                        codeString += $"\nException: {httpResponse.ErrorException.Message}";
+                        codeString += $"\nException: {httpResponse.ErrorException}";
                     }
                     break;
                 }

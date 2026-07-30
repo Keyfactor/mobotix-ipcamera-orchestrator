@@ -102,3 +102,12 @@ is rebooted to apply the new TLS certificate.
 > **v1.0.0**
 > - Only one certificate is managed at a time
 > - ODKG/Reenrollment jobs must use the same alias (derived from Store Path, typically `HTTPS`) 
+
+## Release Notes
+
+**1.0.0**
+- Improved HTTP communication diagnostics to improve troubleshooting of camera connectivity and communication issues.
+- Updated ODKG job initialization to align with the other jobs.
+- Removed an unnecessary dependency path that could prevent the ODKG job loading in certain environments.
+- Added support for PAM credential retrieval.
+- Initial Public Version.
