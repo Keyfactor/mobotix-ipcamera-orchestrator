@@ -46,6 +46,45 @@ Since Mobotix cameras do not support on-device key generation, the extension per
 
 This workflow is fully automated. 
 
+> [!NOTE]
+> Mobotix devices support only a single TLS certificate for the camera's web server.
+> As a result, there is only one valid **Store Path** per device, which should
+> typically be set to `HTTPS`. Choose a name for the **Store Path** that meaningfully represents the TLS certificate.
+>
+> During an ODKG/Reenrollment job, a new certificate is generated and installed
+> on the device, always replacing the existing certificate.
+>
+> The Store Path value is always used to identify the TLS certificate associated with the camera's web server.
+> The **Overwrite** setting and **Alias** field are user interface elements only
+> and do not affect how the certificate is installed or managed.
+
+### Configuration Example
+
+The following example demonstrates how the Store Path behaves in an ODKG/Reenrollment job configuration:
+
+- **Store Path:** `HTTPS`
+- **Overwrite:** `true` or `false`
+- **Alias:** *(ignored; may or may not be visible)
+
+In this configuration:
+- The device supports only a single TLS certificate
+- The Store Path (`HTTPS`) represents the camera’s web server TLS endpoint
+- The ODKG job generates a new certificate and installs it on the device
+- The newly issued certificate always replaces the existing certificate
+
+User interface behavior:
+- Selecting **Overwrite** displays the Alias field
+- Clearing **Overwrite** hides the Alias field
+
+Operational behavior:
+- The **Overwrite** setting has no impact on certificate replacement
+- The **Alias** value is not used for certificate identification
+- The Store Path is the only value used to identify the certificate associated with the camera
+
+> [!TIP]
+> Because only a single TLS certificate exists per device, there is only one Store Path.
+> Use a consistent, meaningful value (for example, `HTTPS`).
+
 ### Use Cases
 
 #### Supported
@@ -76,6 +115,7 @@ Before installing the Mobotix IP Camera Universal Orchestrator extension, we rec
 1. A Mobotix IP Network Camera (tested on MX-V7.3.5.35)
 2. An account with **Administrator** privileges
 3. Network connectivity from orchestrator to camera over HTTP/HTTPS
+4. The Mobotix IP Camera integration currently supports **Basic Authentication only**, which must be configured on the camera.
 
 ## MobotixIPCamera Certificate Store Type
 
@@ -167,7 +207,7 @@ the Keyfactor Command Portal
    ##### Advanced Tab
    | Attribute | Value | Description |
    | --------- | ----- | ----- |
-   | Supports Custom Alias | Required | Determines if an individual entry within a store can have a custom Alias. |
+   | Supports Custom Alias | Forbidden | Determines if an individual entry within a store can have a custom Alias. |
    | Private Key Handling | Forbidden | This determines if Keyfactor can send the private key associated with a certificate to the store. |
    | PFX Password Style | Default | 'Default' - PFX password is randomly generated, 'Custom' - PFX password may be specified when the enrollment job is created (Requires the Allow Custom Password application setting to be enabled.) |
 
@@ -256,7 +296,17 @@ the Keyfactor Command Portal
 
 ## Post Installation
 
-Work in Progress
+After a certificate is installed as part of an ODKG/Reenrollment job, the camera
+is rebooted to apply the new TLS certificate.
+
+> [!IMPORTANT]
+> The camera may take several minutes to reboot and become reachable again.
+> During this time, API calls (such as Inventory jobs) will fail because the device
+> is temporarily unavailable.
+
+> [!TIP]
+> It is recommended to wait for the camera to fully come back online before initiating
+> additional jobs, such as Inventory or ODKG/Reenrollment.
 
 ## Defining Certificate Stores
 
@@ -343,14 +393,23 @@ Due to device limitations:
 
 - Only a single TLS certificate is managed per device
 - Certificate and private key are uploaded separately
-- A **device reboot is required** for the certificate to take effect (Handled automatically via the enrollment workflow)
+- A **device reboot is required** for the certificate to take effect (handled automatically via the enrollment workflow)
 
 ## Caveats
 
 > [!NOTE]
 > **v1.0.0**
 > - Only one certificate is managed at a time
-> - ODKG/Reenrollment jobs must use the same alias (i.e. "HTTPS") and "Overwrite" must be set to *true*
+> - ODKG/Reenrollment jobs must use the same alias (derived from Store Path, typically `HTTPS`)
+
+## Release Notes
+
+**1.0.0**
+- Improved HTTP communication diagnostics to improve troubleshooting of camera connectivity and communication issues.
+- Updated ODKG job initialization to align with the other jobs.
+- Removed an unnecessary dependency path that could prevent the ODKG job loading in certain environments.
+- Added support for PAM credential retrieval.
+- Initial Public Version.
 
 ## License
 
