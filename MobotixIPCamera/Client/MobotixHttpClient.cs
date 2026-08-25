@@ -12,6 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Xml;
@@ -26,6 +27,7 @@ using Keyfactor.Orchestrators.Extensions;
 using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Model;
 using Keyfactor.Orchestrators.Extensions.Interfaces;
 using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers;
+using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Exceptions;
 
 /* MobotixHttpClient.cs
  * ---------------------------------------------------------------------------------------------------
@@ -59,46 +61,55 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                 Logger.LogTrace("Initializing Mobotix IP Camera HTTP client");
                 
                 // ** NOTE: Ignoring the default config.UseSSL custom field --- we will always connect to the device via HTTPS
-                // TODO: For Testing --- Using HTTPS is required to retrieve the TLS cert
                 _baseRestClientUrl = $"https://{store.ClientMachine}";
                 
                 Logger.LogDebug($"Base HTTP client URL: {_baseRestClientUrl}");
-
-                // Initialize custom HTTP handler to validate device identity
-                RestClientOptions options = null;
-                Logger.LogTrace($"Adding custom TLS cert validator to the HTTP client options...");
-                var handler = new HttpClientHandler
-                {
-                    ServerCertificateCustomValidationCallback =
-                        DeviceCertValidator.GetValidator(store.StorePath, errorContext, Logger, cert => _capturedTlsCert = cert)
-                };
                 
-                // Add Basic Auth username and password credentials
-                Logger.LogTrace("Adding Basic Auth Credentials to the HTTP client options...");
+                // Retrieve username and password credentials to connect to the device
+                Logger.LogTrace("Adding device credentials to the HTTP client options...");
                 string username = PAMUtilities.ResolvePAMField(resolver, Logger, "API Username", config.ServerUsername);
                 string password = PAMUtilities.ResolvePAMField(resolver, Logger, "API Password", config.ServerPassword);
                 
-                #if DEBUG
+#if DEBUG
                 Logger.LogTrace($"API Username: {username}");
                 Logger.LogTrace($"API Password: {password}");
-                #endif
+#endif
+                
+                // The client intentionally uses HttpClientHandler credentials
+                // rather than RestSharp's HttpBasicAuthenticator to allow
+                // automatic negotiation of Basic vs Digest authentication
+                // based on the authentication challenge presented by the camera.
+                Logger.LogInformation($"Adding custom TLS cert validator to the HTTP client options.");
+                Logger.LogTrace($"Using HttpClientHandler credential negotiation for camera authentication.");
+                var handler = new HttpClientHandler
+                {
+                    ServerCertificateCustomValidationCallback =
+                        DeviceCertValidator.GetValidator(
+                            store.StorePath, 
+                            errorContext, 
+                            Logger, 
+                cert => _capturedTlsCert = cert),
+                    
+                    Credentials = new NetworkCredential(username, password),
+                    
+                    PreAuthenticate = false // PreAuthenticate is set to false to avoid the default behavior of sending the username and password in the Authorization header
+                };
                 
                 // Initialize HTTP client options with the base URL and custom TLS cert validator
-                options = new RestClientOptions(_baseRestClientUrl)
+                RestClientOptions options = new RestClientOptions(_baseRestClientUrl)
                 {
-                    ConfigureMessageHandler = _ => handler,
-                    Authenticator = new HttpBasicAuthenticator(username, password),
-                    PreAuthenticate = true // forces auth header on first request
+                    ConfigureMessageHandler = _ => handler
                 };
 
                 // Add SSL validation
                 Logger.LogTrace("Validating connection to the device...");
 
                 _httpClient = new RestClient(options);
-                var request = new RestRequest("config/camera/media"); // Initiates the TLS handshake to retrieve the server cert
+                // Initiates the TLS handshake to retrieve the server cert
+                var request = new RestRequest("config/camera/media"); 
                 var response = _httpClient.Execute(request);
 
-                // Build the list of errors to log to the console
+                // TODO: Build the list of errors to log to the console
                 /*StringBuilder errorSb = new StringBuilder();
                 if (errorContext.HasErrors)
                 {
@@ -109,14 +120,49 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                     throw new Exception(errorSb.ToString());
                 }*/
                 
+                // Log the WWW-Authenticate headers if 401 Unauthorized returned
+                // Throw exception if connection cannot be made successfully to the camera
+                if (response.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    Logger.LogWarning("Camera returned 401 Unauthorized");
+
+                    foreach (var header in response.Headers)
+                    {
+                        Logger.LogDebug($"WWW-Authenticate header: {header.Value}");
+                    }
+
+                    throw new AuthenticationException(
+                        "Authentication to the Mobotix camera failed due to 401 Unauthorized. Verify the configured credentials.");
+                }
+
+                if (!response.IsSuccessful)
+                {
+                    throw new Exception(response.ErrorMessage);
+                }
+                
                 Logger.LogTrace($"Connection to the device response status code: {response.StatusCode}");
                 Logger.LogTrace("Completed Initialization of Mobotix IP Camera HTTP Client");
                 Logger.LogTrace("Leaving MobotixHttpClient constructor.");
             }
-            catch (Exception e)
+            catch (DeviceCertValidationException ex)
             {
-                Logger.LogError("Error initializing Mobotix IP Camera HTTP Client: " + LogHandler.FlattenException(e));
-                throw new Exception($"Device identity could not be verified successfully --- {e.Message}");
+                Logger.LogError("Device TLS cert validation failed while connecting to the device: " + LogHandler.FlattenException(ex));
+                throw new Exception(ex.Message);
+            }
+            catch (AuthenticationException ex1)
+            {
+                Logger.LogError("Authentication to the device failed: " + LogHandler.FlattenException(ex1));
+                throw new Exception(ex1.Message);
+            }
+            catch (HttpRequestException ex2)
+            {
+                Logger.LogError("Failed to communicate with the device: " + LogHandler.FlattenException(ex2));
+                throw new Exception(ex2.Message);
+            }
+            catch (Exception ex3)
+            {
+                Logger.LogError("Unexpected error while connecting to the device: " + LogHandler.FlattenException(ex3));
+                throw new Exception(ex3.Message);
             }
         }
         
