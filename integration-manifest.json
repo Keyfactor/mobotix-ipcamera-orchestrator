@@ -4,12 +4,11 @@
   "name": "Mobotix IP Camera",
   "status": "pilot",
   "support_level": "kf-supported",
+  "link_github": true,
+  "update_catalog": true,
+  "description": "The Mobotix IP Camera Orchestrator Extension is used to inventory and enroll the TLS certificate associated with the camera's web server.",
   "release_dir": "MobotixIPCamera\\bin\\Release",
   "release_project":"MobotixIPCamera\\MobotixIPCamera.csproj",
-  "update_catalog": true,
-  "link_github": true,
-  "description": "The Mobotix IP Camera Orchestrator Extension is used to inventory and enroll a camera's web server certificate.",
-  "short_description": "The Mobotix IP Camera Orchestrator Extension is used to inventory and enroll a camera's web server certificate.",
   "about": {
     "orchestrator": {
       "UOFramework": "25.4",
@@ -20,59 +19,70 @@
           "Name": "Mobotix IP Camera",
           "ShortName": "MobotixIPCamera",
           "Capability": "MobotixIPCamera",
-          "ServerRequired": true,
-          "BlueprintAllowed": false,
-          "PowerShell": false,
-          "CustomAliasAllowed": "Required",
-          "PrivateKeyAllowed": "Forbidden",
+          "LocalStore": true,
+          "ClientMachineDescription": "The IP address of the Camera. Sample is \"192.167.231.174:44444\". Include the port if necessary.",
+          "StorePathDescription": "Not currently used for anything. Can leave blank.",
           "SupportedOperations": {
             "Add": false,
             "Create": false,
             "Discovery": false,
             "Enrollment": true,
-            "Remove": true
-          },
-          "PasswordOptions": {
-            "EntrySupported": false,
-            "StoreRequired": false,
-            "Style": "Default"
+            "Remove": false
           },
           "Properties": [
             {
               "Name": "ServerUsername",
               "DisplayName": "Server Username",
               "Type": "Secret",
+              "Description": "Enter the username of the configured \"service\" user on the camera",
               "DependsOn": "",
               "DefaultValue": "",
-              "Required": true,
-              "Description": "Enter the username of the configured \"service\" user on the camera"
+              "Required": true              
             },
             {
               "Name": "ServerPassword",
               "DisplayName": "Server Password",
               "Type": "Secret",
+              "Description": "Enter the password of the configured \"service\" user on the camera",
               "DependsOn": "",
               "DefaultValue": "",
-              "Required": true,
-              "Description": "Enter the password of the configured \"service\" user on the camera"
+              "Required": true              
             },
             {
               "Name": "ServerUseSsl",
               "DisplayName": "Use SSL",
               "Type": "Bool",
+              "Description": "Select True or False depending on if SSL (HTTPS) should be used to communicate with the camera.",
               "DependsOn": "",
               "DefaultValue": "true",
-              "Required": true,
-              "Description": "Select True or False depending on if SSL (HTTPS) should be used to communicate with the camera. This should always be \"True\""
+              "Required": true
+            },
+            {
+              "Name": "BypassTlsValidation",
+              "DisplayName": "Bypass TLS Validation",
+              "Type": "Bool",
+              "Description": "If true and 'Use SSL' is enabled, TLS certificate validation is skipped when connecting to the camera. Has no effect when 'Use SSL' is false. Only enable this when the camera's certificate cannot be trusted by the orchestrator server.",
+              "DependsOn": "",
+              "DefaultValue": "false",
+              "Required": true
             }
           ],
           "EntryParameters": [
           ],
-          "ClientMachineDescription": "The IP address of the Camera. Sample is \"192.167.231.174:44444\". Include the port if necessary.",
-          "StorePathDescription": "Enter the Serial Number of the camera e.g. `0b7c3d2f9e8a`",
-          "StorePathType": "",
-          "StorePathValue": "",
-          "JobProperties": []
+          "PasswordOptions": {
+            "EntrySupported": false,
+            "StoreRequired": false,
+            "Style": "Default"
+          },
+          "StorePathType": "Fixed",
+          "StorePathValue": "httpd_cert.pem",
+          "PrivateKeyAllowed": "Forbidden",
+          "JobProperties": [],
+          "ServerRequired": true,
+          "PowerShell": false,
+          "BlueprintAllowed": false,
+          "CustomAliasAllowed": "Forbidden"
+          
         }
       ]
     }
