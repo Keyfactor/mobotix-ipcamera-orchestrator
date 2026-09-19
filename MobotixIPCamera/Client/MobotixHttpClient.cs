@@ -7,27 +7,22 @@
 
 using System;
 using System.Collections.Generic;
-using System.Reflection;
-using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using System.Xml;
-using System.Xml.Linq;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using RestSharp;
-using RestSharp.Authenticators;
 
 using Keyfactor.Logging;
 using Keyfactor.Orchestrators.Extensions;
-using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Model;
 using Keyfactor.Orchestrators.Extensions.Interfaces;
-using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers;
 using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Exceptions;
+using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers;
+using Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Model;
 
 /* MobotixHttpClient.cs
  * ---------------------------------------------------------------------------------------------------
@@ -48,6 +43,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
         private readonly RestClient _httpClient;
         private string _baseRestClientUrl;
         private X509Certificate2 _capturedTlsCert;
+        private readonly bool _serverUseSsl;
         
         private ILogger Logger { get; }
         public MobotixHttpClient(JobConfiguration config, CertificateStore store, IPAMSecretResolver resolver)
@@ -55,14 +51,27 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
             try
             {
                 var errorContext = new CertificateErrorContext();
-                
+
                 Logger = LogHandler.GetClassLogger<MobotixHttpClient>();
                 Logger.LogTrace("Entered MobotixHttpClient constructor.");
                 Logger.LogTrace("Initializing Mobotix IP Camera HTTP client");
-                
-                // ** NOTE: Ignoring the default config.UseSSL custom field --- we will always connect to the device via HTTPS
-                _baseRestClientUrl = $"https://{store.ClientMachine}";
-                
+
+                // ServerUseSsl is a reserved custom store property name that the SDK binds
+                // directly onto config.UseSSL, so it's read from there rather than parsed
+                // out of the Properties JSON blob. BypassTlsValidation is not a reserved
+                // name, so it still has to be parsed manually.
+                _serverUseSsl = config.UseSSL;
+
+                bool bypassTlsValidation = false;
+                if (!string.IsNullOrWhiteSpace(store.Properties))
+                {
+                    var storeProperties = JObject.Parse(store.Properties);
+                    bypassTlsValidation = storeProperties["BypassTlsValidation"]?.Value<bool>() ?? false;
+                }
+
+                var protocol = _serverUseSsl ? "https" : "http";
+                _baseRestClientUrl = $"{protocol}://{store.ClientMachine}";
+
                 Logger.LogDebug($"Base HTTP client URL: {_baseRestClientUrl}");
                 
                 // Retrieve username and password credentials to connect to the device
@@ -75,21 +84,35 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                 Logger.LogTrace($"API Password: {password}");
 #endif
                 
-                // The client intentionally uses HttpClientHandler credentials
-                // rather than RestSharp's HttpBasicAuthenticator to allow
-                // automatic negotiation of Basic vs Digest authentication
-                // based on the authentication challenge presented by the camera.
-                Logger.LogInformation($"Adding custom TLS cert validator to the HTTP client options.");
+                // The client intentionally uses HttpClientHandler credentials rather than
+                // RestSharp's HttpBasicAuthenticator to allow automatic negotiation of Basic vs
+                // Digest authentication based on the authentication challenge presented by the
+                // camera. This is the standard authentication negotiation approach used across
+                // Keyfactor's camera integrations, rather than a Mobotix-specific mechanism.
+                Logger.LogInformation($"Adding custom TLS cert validator to the HTTP client options. BypassTlsValidation={bypassTlsValidation}");
                 Logger.LogTrace($"Using HttpClientHandler credential negotiation for camera authentication.");
+
+                // ServerCertificateCustomValidationCallback only fires during an actual TLS
+                // handshake, so it - and 'BypassTlsValidation' - has no effect when
+                // _serverUseSsl is false (plain HTTP); _capturedTlsCert stays null in that case
+                // (see ListCertificates()). When 'BypassTlsValidation' is false, a dedicated
+                // validator (DeviceCertValidator) is used instead of .NET's default behavior so
+                // specific validation failure reasons are captured and surfaced, and so the
+                // certificate can still be captured off the handshake when the camera is in its
+                // factory-default state, where the primary retrieval endpoint returns nothing.
                 var handler = new HttpClientHandler
                 {
-                    ServerCertificateCustomValidationCallback =
-                        DeviceCertValidator.GetValidator(
-                            store.StorePath, 
-                            errorContext, 
-                            Logger, 
-                cert => _capturedTlsCert = cert),
-                    
+                    ServerCertificateCustomValidationCallback = bypassTlsValidation
+                        ? (_, cert, _, _) =>
+                        {
+                            _capturedTlsCert = cert;
+                            return true;
+                        }
+                        : DeviceCertValidator.GetValidator(
+                            errorContext,
+                            Logger,
+                            cert => _capturedTlsCert = cert),
+
                     Credentials = new NetworkCredential(username, password),
                     
                     PreAuthenticate = false // PreAuthenticate is set to false to avoid the default behavior of sending the username and password in the Authorization header
@@ -109,16 +132,18 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                 var request = new RestRequest("config/camera/media"); 
                 var response = _httpClient.Execute(request);
 
-                // TODO: Build the list of errors to log to the console
-                /*StringBuilder errorSb = new StringBuilder();
+                // Build the list of TLS validation errors, if any, and surface them to the caller
                 if (errorContext.HasErrors)
                 {
+                    StringBuilder errorSb = new StringBuilder();
                     foreach (var error in errorContext.Errors)
                     {
                         errorSb.AppendLine(error);
                     }
-                    throw new Exception(errorSb.ToString());
-                }*/
+
+                    throw new DeviceCertValidationException(
+                        $"Device TLS cert validator errors encountered --- {errorSb}");
+                }
                 
                 // Log the WWW-Authenticate headers if 401 Unauthorized returned
                 // Throw exception if connection cannot be made successfully to the camera
@@ -222,9 +247,19 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                         Logger.LogWarning($"TLS Certificate was captured. TLS Certificate: {_capturedTlsCert.Subject}");
                         certsFound.Certs.Add( new Certificate() {Alias = "HTTPS", CertChainAsPem = new List<string>() {Certificate.ExportToPem(_capturedTlsCert)}} );
                     }
+                    else if (!_serverUseSsl)
+                    {
+                        // This fallback exists because the camera's API does not return a certificate via
+                        // the primary retrieval method above while the camera is on its factory default
+                        // certificate (either factory-fresh, or reverted back after a certificate was
+                        // removed). The fallback requires a live TLS session to capture the presented
+                        // cert, which is unavailable over plain HTTP.
+                        Logger.LogWarning("TLS certificate could not be determined - no live TLS session is available because this connection is using HTTP. " +
+                                          "Enable 'Use SSL' to allow certificate retrieval to fall back to the live TLS session.");
+                    }
                     else
                     {
-                        Logger.LogWarning("No TLS Certificate was captured. Please check the logs for more information.");   
+                        Logger.LogWarning("No TLS Certificate was captured. Please check the logs for more information.");
                     }
                 }
                 

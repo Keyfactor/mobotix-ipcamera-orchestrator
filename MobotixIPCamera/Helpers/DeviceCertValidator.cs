@@ -7,21 +7,10 @@
 
 #nullable enable
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Net.Http;
 using System.Net.Security;
-using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
-
-using Org.BouncyCastle.Asn1.X509;
-using Org.BouncyCastle.X509;
-using Org.BouncyCastle.X509.Extension;
-using X509Certificate = Org.BouncyCastle.X509.X509Certificate;
-
-using Keyfactor.Logging;
 
 namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
 {
@@ -29,16 +18,18 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
     {
         /// <summary>
         /// This method is a custom HTTP validator that performs the following logic:
-        /// TODO
+        /// 1. Captures the server's TLS certificate for callers that need it (e.g. Inventory's
+        ///    fallback when the primary content-based certificate retrieval finds nothing).
+        /// 2. Checks the cert against standard .NET SSL policy errors, recording specific,
+        ///    human-readable error messages in errorContext so they can be surfaced to the
+        ///    end user (via DeviceCertValidationException) rather than a generic pass/fail.
         /// </summary>
         public static Func<HttpRequestMessage, X509Certificate2?, X509Chain?, SslPolicyErrors, bool> GetValidator(
-            string expectedValue, CertificateErrorContext errorContext, ILogger logger,
+            CertificateErrorContext errorContext, ILogger logger,
             Action<X509Certificate2> onCertCaptured)
         {
             return (message, cert, chain, sslPolicyErrors) =>
             {
-                bool customChainValid = false;
-
                 if (null == cert)
                 {
                     errorContext.Add("SSL Cert is null");
@@ -53,129 +44,8 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
 
                 onCertCaptured?.Invoke(new X509Certificate2(cert));
 
-                // VALIDATION 1: Verify the TLS cert chain against the AXIS PKI --- Did this cert come off an AXIS PKI?
-                // This check will be done with SKI/AKI matching against the custom chain
-                /*logger.LogTrace($"Performing Cert Validator Check #1: Verify the TLS cert chain against custom chain of AXIS PKI certs...");
-
-                // Load custom trusted certs
-                string basePath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
-                logger.LogTrace($"Base PATH for custom trusted certs: {basePath}");
-
-                string trustedRootCertPath = Path.Combine(basePath, "Files", "Axis.Root");
-                string trustedIntCertPath = Path.Combine(basePath, "Files", "Axis.Intermediate");
-                logger.LogTrace($"Combined PATH for custom trusted Root certs: {trustedRootCertPath}");
-                logger.LogTrace($"Combined PATH for custom trusted Intermediate certs: {trustedIntCertPath}");
-
-                X509CertificateParser parser = new X509CertificateParser();
-                var customChain = new List<X509Certificate> { };
-
-                // Add TLS cert as leaf certificate to the end of the custom chain
-                customChain.Add(parser.ReadCertificate(cert.RawData));
-
-                if (!File.Exists(trustedIntCertPath))
-                {
-                    logger.LogError($"{trustedIntCertPath} does not exist.");
-                    return false;
-                }
-
-                logger.LogTrace($"Loading Trusted Intermediate Certs from {trustedIntCertPath}");
-                var trustedIntCerts = parser.ReadCertificates(File.ReadAllBytes(trustedIntCertPath));
-
-                if (0 == trustedIntCerts.Count)
-                {
-                    logger.LogTrace("No Trusted Intermediate Certs found");
-                    errorContext.Add($"No Trusted Intermediate Certs found at '{trustedIntCertPath}'");
-                    return false;
-                }
-
-                // Add each intermediate cert to the end of the custom chain
-                foreach (var trustedCert in trustedIntCerts)
-                {
-                    customChain.Add(trustedCert);
-                }
-
-                logger.LogTrace($"{trustedIntCerts.Count} Trusted Intermediate Certs found");
-
-                if (!File.Exists(trustedRootCertPath))
-                {
-                    logger.LogError($"{trustedRootCertPath} does not exist.");
-                    return false;
-                }
-
-                logger.LogTrace($"Loading Trusted Root Cert from {trustedRootCertPath}");
-                var trustedRootCerts = parser.ReadCertificates(File.ReadAllBytes(trustedRootCertPath));
-
-                // Verify there is only 1 Root cert
-                if (trustedRootCerts.Count > 1)
-                {
-                    logger.LogTrace("Custom Root trust must only contain 1 certificate");
-                    errorContext.Add($"More than 1 certificate found at '{trustedRootCertPath}'");
-                    return false;
-                }
-                else if (0 == trustedRootCerts.Count)
-                {
-                    logger.LogTrace("No Trusted Root Certs found");
-                    errorContext.Add($"No Trusted Certs found at '{trustedRootCertPath}'");
-                    return false;
-                }
-
-                // Add the root cert to the end of the custom chain
-                customChain.Add(trustedRootCerts[0]);
-
-                logger.LogTrace($"Attempting to verify the AKI/SKI values of the TLS cert against custom chain...");
-                customChainValid = VerifyAkiSkiChain(customChain, logger);
-
-                // VALIDATION 2: If the cert came off the AXIS PKI, we need to validate the SERIALNUMBER in the Subject DN
-                // Otherwise, proceed with default SSL validation. We don't need to perform VALIDATION 2 if the cert did not come from the AXIS PKI.
-                if (customChainValid)
-                {
-                    // Verify the SSL cert Subject DN contains the validating attribute and it matches the expected value
-                    logger.LogTrace($"Cert chain is valid!");
-                    logger.LogTrace($"Performing Cert Validator Check #2: Check the subject DN for attribute SERIALNUMBER and verify it matches the expected value...");
-
-                    var subjectDn = new X500DistinguishedName(cert.SubjectName);
-                    var subjectString = subjectDn.Name;
-
-                    logger.LogDebug($"Device ID cert Subject DN: {subjectString}");
-
-                    var decodedSubject = subjectDn.Decode(X500DistinguishedNameFlags.UseNewLines);
-                    var subjectLines = decodedSubject.Split('\n');
-
-                    bool foundAttribute = false;
-                    foreach (var line in subjectLines)
-                    {
-                        if (line.StartsWith("SERIALNUMBER="))
-                        {
-                            foundAttribute = true;
-                            var snValue = line.Substring(13).Trim();
-                            logger.LogDebug($"Found SERIALNUMBER: {snValue}");
-
-                            if (snValue != expectedValue)
-                            {
-                                errorContext.Add(
-                                    $"SERIALNUMBER attribute value does NOT match the expected value '{expectedValue}'");
-                                return false;
-                            }
-                            else
-                            {
-                                logger.LogTrace($"SERIALNUMBER attribute value matches expected value! Proceed...");
-                                return true;
-                            }
-                        }
-                    }
-
-                    if (!foundAttribute)
-                    {
-                        errorContext.Add("SERIALNUMBER attribute was not found in the certificate Subject DN");
-                        return false;
-                    }
-
-                    return true;
-                }
-
-                // VALIDATION 3: Check for standard SSL errors
-                logger.LogTrace($"Skipping Cert Validator Check #2: Check the subject for SERIALNUMBER and verify it matches the expected value...");
-                logger.LogTrace($"Performing Cert Validator Check #3: Verify cert against default system validation...");
+                // Check for standard SSL errors
+                logger.LogTrace("Verifying cert against default system validation...");
                 bool sslErrors = false;
                 if (sslPolicyErrors == SslPolicyErrors.None)
                 {
@@ -214,7 +84,6 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
                     errorContext.Insert(0, "TLS Cert validation failed!!");
                     return false;
                 }
-                */
 
                 logger.LogDebug("Certificate chain and subject validated!!");
                 return true;
