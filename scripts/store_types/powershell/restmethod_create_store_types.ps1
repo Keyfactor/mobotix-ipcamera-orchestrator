@@ -49,9 +49,18 @@ $Body = @'
       "Name": "ServerUseSsl",
       "DisplayName": "Use SSL",
       "Type": "Bool",
-      "Description": "Select True or False depending on if SSL (HTTPS) should be used to communicate with the camera. This should always be \"True\"",
+      "Description": "Select True or False depending on if SSL (HTTPS) should be used to communicate with the camera.",
       "DependsOn": "",
       "DefaultValue": "true",
+      "Required": true
+    },
+    {
+      "Name": "BypassTlsValidation",
+      "DisplayName": "Bypass TLS Validation",
+      "Type": "Bool",
+      "Description": "If true and 'Use SSL' is enabled, TLS certificate validation is skipped when connecting to the camera. Has no effect when 'Use SSL' is false. Only enable this when the camera's certificate cannot be trusted by the orchestrator server.",
+      "DependsOn": "",
+      "DefaultValue": "false",
       "Required": true
     }
   ],
@@ -61,8 +70,8 @@ $Body = @'
     "StoreRequired": false,
     "Style": "Default"
   },
-  "StorePathType": "",
-  "StorePathValue": "",
+  "StorePathType": "Fixed",
+  "StorePathValue": "httpd_cert.pem",
   "PrivateKeyAllowed": "Forbidden",
   "JobProperties": [],
   "ServerRequired": true,
