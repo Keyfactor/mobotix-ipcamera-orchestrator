@@ -1,0 +1,14 @@
+﻿{
+  "extensions": {
+    "Keyfactor.Orchestrators.Extensions.IOrchestratorJobExtension": {
+      "CertStores.MobotixIPCamera.Inventory": {
+        "assemblypath": "MobotixIPCamera.dll",
+        "TypeFullName": "Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Inventory"
+      },
+      "CertStores.MobotixIPCamera.Reenrollment": {
+        "assemblypath": "MobotixIPCamera.dll",
+        "TypeFullName": "Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Reenrollment"
+      }
+    }
+  }
+}
