@@ -70,8 +70,8 @@ $Body = @'
     "StoreRequired": false,
     "Style": "Default"
   },
-  "StorePathType": "Fixed",
-  "StorePathValue": "httpd_cert.pem",
+  "StorePathType": "",
+  "StorePathValue": "",
   "PrivateKeyAllowed": "Forbidden",
   "JobProperties": [],
   "ServerRequired": true,

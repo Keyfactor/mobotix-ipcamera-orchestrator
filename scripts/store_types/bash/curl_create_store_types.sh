@@ -70,8 +70,8 @@ curl -s -X POST "https://${KEYFACTOR_HOSTNAME}/${KEYFACTOR_API_PATH}/Certificate
     "StoreRequired": false,
     "Style": "Default"
   },
-  "StorePathType": "Fixed",
-  "StorePathValue": "httpd_cert.pem",
+  "StorePathType": "",
+  "StorePathValue": "",
   "PrivateKeyAllowed": "Forbidden",
   "JobProperties": [],
   "ServerRequired": true,
