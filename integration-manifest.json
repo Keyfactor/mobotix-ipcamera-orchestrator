@@ -21,7 +21,7 @@
           "Capability": "MobotixIPCamera",
           "LocalStore": true,
           "ClientMachineDescription": "The IP address of the Camera. Sample is \"192.167.231.174:44444\". Include the port if necessary.",
-          "StorePathDescription": "Not currently used for anything. Can leave blank.",
+          "StorePathDescription": "Enter the camera's factory IP address, as shown in the camera's web UI at initial setup. Used to validate the camera's factory certificate.",
           "SupportedOperations": {
             "Add": false,
             "Create": false,
@@ -74,8 +74,8 @@
             "StoreRequired": false,
             "Style": "Default"
           },
-          "StorePathType": "Fixed",
-          "StorePathValue": "httpd_cert.pem",
+          "StorePathType": "",
+          "StorePathValue": "",
           "PrivateKeyAllowed": "Forbidden",
           "JobProperties": [],
           "ServerRequired": true,

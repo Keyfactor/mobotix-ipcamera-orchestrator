@@ -40,6 +40,10 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
 {
     public class MobotixHttpClient
     {
+        // Alias reported to Command for the camera's single TLS certificate. Fixed, not
+        // derived from Store Path, which now holds the camera's factory IP address instead.
+        private const string HttpsAlias = "HTTPS";
+
         private readonly RestClient _httpClient;
         private string _baseRestClientUrl;
         private X509Certificate2 _capturedTlsCert;
@@ -105,10 +109,15 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                     ServerCertificateCustomValidationCallback = bypassTlsValidation
                         ? (_, cert, _, _) =>
                         {
-                            _capturedTlsCert = cert;
+                            // cert must be cloned here - the object .NET passes into this callback is only
+                            // valid for the duration of the callback itself. Storing it directly (without
+                            // cloning) throws "m_safeCertContext is an invalid handle" later, whenever
+                            // _capturedTlsCert is read (e.g. ListCertificates()).
+                            _capturedTlsCert = cert != null ? new X509Certificate2(cert) : null;
                             return true;
                         }
                         : DeviceCertValidator.GetValidator(
+                            store.StorePath,
                             errorContext,
                             Logger,
                             cert => _capturedTlsCert = cert),
@@ -199,8 +208,8 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
         /// The contents of that PEM file correspond to the TLS certificate.
         /// </summary>
         /// <returns>CertificateData object</returns>
-        public CertificateData ListCertificates(string alias)
-        {  
+        public CertificateData ListCertificates()
+        {
             Logger.MethodEntry();
             
             var certsFound = new CertificateData();
@@ -229,7 +238,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
 
                 if (cameraMediaCertResult.HasCertificate)
                 {
-                    Logger.LogDebug($"Retrieved TLS Certificate from Device");
+                    Logger.LogInformation("Retrieved TLS certificate via the device's primary content API.");
                     var certChain = new List<string>();
                     foreach (var c in cameraMediaCertResult.CertChain)
                     {
@@ -237,15 +246,15 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                         certChain.Add(c);
                     }
 
-                    certsFound.Certs.Add( new Certificate() {Alias = alias, CertChainAsPem = certChain} );
+                    certsFound.Certs.Add( new Certificate() {Alias = HttpsAlias, CertChainAsPem = certChain} );
                 }
                 else
                 {
                     // Check what the TLS cert was captured
                     if (_capturedTlsCert != null)
                     {
-                        Logger.LogWarning($"TLS Certificate was captured. TLS Certificate: {_capturedTlsCert.Subject}");
-                        certsFound.Certs.Add( new Certificate() {Alias = "HTTPS", CertChainAsPem = new List<string>() {Certificate.ExportToPem(_capturedTlsCert)}} );
+                        Logger.LogWarning($"Retrieved TLS certificate via the TLS handshake fallback (the primary content API returned nothing). Subject: {_capturedTlsCert.Subject}");
+                        certsFound.Certs.Add( new Certificate() {Alias = HttpsAlias, CertChainAsPem = new List<string>() {Certificate.ExportToPem(_capturedTlsCert)}} );
                     }
                     else if (!_serverUseSsl)
                     {
@@ -262,9 +271,18 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Client
                         Logger.LogWarning("No TLS Certificate was captured. Please check the logs for more information.");
                     }
                 }
-                
+
+                // The camera only ever has one certificate slot, so an empty result here is always
+                // anomalous - not a legitimate "nothing to report" case. Fail the job instead of
+                // silently submitting an empty certificate list to Command; see the warning logged
+                // above for the specific reason nothing was found.
+                if (certsFound.Certs.Count == 0)
+                {
+                    throw new Exception("No certificate could be retrieved from the camera via either the primary content API or the TLS handshake fallback.");
+                }
+
                 Logger.MethodExit();
-                
+
                 return certsFound;
             }
             catch (Exception e)

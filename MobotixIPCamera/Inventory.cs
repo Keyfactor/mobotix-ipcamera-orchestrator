@@ -54,7 +54,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
                 
                 // Perform client cert inventory
                 _logger.LogTrace("Retrieve TLS certificate");
-                CertificateData data = client.ListCertificates(config.CertificateStoreDetails.StorePath);
+                CertificateData data = client.ListCertificates();
                 
                 // Build the list of client certificates and add to the InventoryItems object sent back to Command
                 inventoryItems.AddRange(data.Certs.Select(

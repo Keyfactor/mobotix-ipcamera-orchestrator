@@ -73,10 +73,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
                 string keyAlgorithm = config.JobProperties["keyType"].ToString() ?? throw new Exception("Key Algorithm returned null");
                 string keySize = config.JobProperties["keySize"].ToString() ?? throw new Exception("Key Size returned null");
                 string subject = config.JobProperties["subjectText"].ToString() ?? throw new Exception("Subject returned null");
-                string newAlias = config.CertificateStoreDetails.StorePath;
-                
-                _logger.LogDebug($"Alias: {newAlias}");
-                
+
                 _logger.LogTrace("Create private key pair and generate CSR");
                 var result = _csrService.GenerateCsr(
                     new CsrRequest(
