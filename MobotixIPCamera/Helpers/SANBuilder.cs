@@ -93,7 +93,6 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
 
         /// <summary>
         /// Normalize SAN type keys to RFC-compliant names.
-        /// **NOTE: The Axis API only supports the addition of 'dns' and 'ip' SAN types.
         /// Courtesy of B.Pokorny.
         /// </summary>
         private static string NormalizeSanKey(string key)
