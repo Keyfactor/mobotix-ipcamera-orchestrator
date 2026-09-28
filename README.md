@@ -89,7 +89,7 @@ Has not been tested with any other model or software version.
 
 ### Authentication
 
-The Mobotix IP Camera Orchestrator Extension uses .NET HttpClientHandler credential negotiation when connecting to Mobotix devices over HTTPS, the same mechanism used by the AXIS IP Camera Orchestrator Extension.
+The Mobotix IP Camera Orchestrator Extension uses .NET HttpClientHandler credential negotiation when connecting to Mobotix devices over HTTPS.
 This allows the orchestrator to automatically negotiate the authentication mechanism required by the camera.
 The orchestrator has been validated against Mobotix cameras configured with:
 
@@ -298,7 +298,7 @@ the Keyfactor Command Portal
    | Category | Select "Mobotix IP Camera" or the customized certificate store name from the previous step. |
    | Container | Optional container to associate certificate store with. |
    | Client Machine | The IP address of the Camera. Sample is "192.167.231.174:44444". Include the port if necessary. |
-   | Store Path | Not currently used for anything. Can leave blank. |
+   | Store Path | Enter the camera's factory IP address, as shown in the camera's web UI at initial setup. Used to validate the camera's factory certificate. |
    | Orchestrator | Select an approved orchestrator capable of managing `MobotixIPCamera` certificates. Specifically, one with the `MobotixIPCamera` capability. |
    | ServerUsername | Enter the username of the configured "service" user on the camera |
    | ServerPassword | Enter the password of the configured "service" user on the camera |
@@ -325,7 +325,7 @@ the Keyfactor Command Portal
    | Category | Select "Mobotix IP Camera" or the customized certificate store name from the previous step. |
    | Container | Optional container to associate certificate store with. |
    | Client Machine | The IP address of the Camera. Sample is "192.167.231.174:44444". Include the port if necessary. |
-   | Store Path | Not currently used for anything. Can leave blank. |
+   | Store Path | Enter the camera's factory IP address, as shown in the camera's web UI at initial setup. Used to validate the camera's factory certificate. |
    | Orchestrator | Select an approved orchestrator capable of managing `MobotixIPCamera` certificates. Specifically, one with the `MobotixIPCamera` capability. |
    | Properties.ServerUsername | Enter the username of the configured "service" user on the camera |
    | Properties.ServerPassword | Enter the password of the configured "service" user on the camera |
@@ -360,31 +360,52 @@ Please refer to the **Universal Orchestrator (remote)** usage section ([PAM prov
 
 ## Device Onboarding
 
-Cameras are typically provisioned with a self-signed or otherwise untrusted device identity certificate.
+Cameras are typically provisioned with a self-signed or otherwise untrusted device identity certificate. The
+**Use SSL** and **Bypass TLS Validation** certificate store properties together determine what's required to
+connect successfully:
 
-The **Use SSL** certificate store property controls whether the orchestrator connects to the camera over HTTP or
-HTTPS:
-
-- If **Use SSL** is disabled, the orchestrator connects over plain HTTP. There is no TLS handshake, so
-  certificate trust does not apply, and **Bypass TLS Validation** has no effect.
-- If **Use SSL** is enabled, the orchestrator connects over HTTPS and, by default, validates the camera's
-  certificate like any other TLS connection - denying the operation if the certificate is not trusted.
+| Use SSL | Bypass TLS Validation | Behavior |
+| --- | --- | --- |
+| `False` | *(any)* | Connects over plain HTTP. There is no TLS handshake, so certificate trust does not apply, and **Bypass TLS Validation** has no effect either way. |
+| `True` | `True` | Connects over HTTPS but skips certificate validation entirely - any certificate is accepted, including the camera's untrusted factory certificate. |
+| `True` | `False` | Connects over HTTPS and validates the certificate like any other TLS connection - see below for what's required to pass. |
 
 > [!WARNING]
 > It is highly recommended to keep **Use SSL** enabled. Plain HTTP sends credentials and certificate data to
 > the camera unencrypted, and is only intended as a fallback for cameras or networks that cannot support HTTPS.
 
-To connect successfully over HTTPS when the camera's certificate is untrusted, either:
+When **Use SSL** is `True` and **Bypass TLS Validation** is `False`, install the certificate's issuing
+intermediate and root CAs into the orchestrator server's local trust store so that standard TLS validation
+succeeds. This applies both to the camera's initial factory certificate and, later, to whatever certificate is
+enrolled from the customer's own PKI - each requires its own issuing intermediate and root CAs to be trusted,
+since they're typically different CAs.
 
-- Install the certificate's issuing intermediate and root CAs into the orchestrator server's local trust store
-  so that standard TLS validation succeeds, or
-- Enable the **Bypass TLS Validation** certificate store property (see the store type documentation) to skip
-  TLS validation.
+### Camera-Specific Trust Validation
 
-This trust requirement is not limited to the camera's initial factory certificate. Once a certificate issued by
-the customer's own PKI has been enrolled onto the camera, subsequent connections are validated against that
-certificate the same way - so the customer PKI's issuing intermediate and root CAs must also be installed in
-the orchestrator server's local trust store, unless **Bypass TLS Validation** is used instead.
+This only applies when **Use SSL** is `True` and **Bypass TLS Validation** is `False`.
+
+While the camera still has its factory certificate, its SAN reflects the camera's IP address at the time of
+manufacture, not wherever it's actually deployed. This causes a name mismatch even when the issuing CAs are
+trusted. To resolve this:
+
+- Enter the camera's factory IP address (shown in the camera's web UI at initial setup) as the certificate
+  store's **Store Path** value.
+- When the certificate's SAN contains that value, and the certificate is otherwise trusted (its issuing
+  intermediate and root CAs are installed on the orchestrator server), the connection succeeds despite not
+  matching the camera's current network address.
+- This doesn't change anything about trust itself: a certificate that doesn't chain to a trusted CA still
+  fails, regardless of Store Path.
+
+> [!NOTE]
+> This check only compares the certificate's SAN against the recorded Store Path value - it does not verify
+> which CA issued the certificate. It is not intended to distinguish the camera's factory certificate from a
+> customer-issued certificate that happens to carry the same value, for example due to a misconfigured
+> enrollment.
+
+> [!NOTE]
+> This only applies while the camera presents its factory certificate. Once a customer-PKI certificate is
+> enrolled via ODKG, its SAN should match the address actually used to connect to the camera (the store's
+> Client Machine value), and this factory-IP exception no longer comes into play.
 
 > [!IMPORTANT]
 > Inventory and Reenrollment (ODKG) jobs both connect to the camera using the same HTTP/HTTPS connection, so
@@ -402,7 +423,7 @@ Mobotix devices support only a single TLS server certificate for the camera's we
 
 A typical ODKG job configuration for a Mobotix certificate store:
 
-- **Store Path:** `httpd_cert.pem` *(automatically set by the store type configuration)*
+- **Store Path:** the camera's factory IP address *(see [Device Onboarding](#device-onboarding))*
 - **Overwrite:** `true` or `false` *(has no effect)*
 - **Alias:** *(only shown if Overwrite is checked; has no effect)*
 
@@ -413,7 +434,8 @@ In this configuration:
 
 Operational behavior:
 - The **Overwrite** and **Alias** fields have no effect — there is only one certificate slot on the device, and every job always replaces it, regardless of these settings
-- **Store Path** is fixed to `httpd_cert.pem` by the store type configuration; the integration does not use this value, but it identifies which certificate file is being tracked
+- **Store Path** is used only for the factory-certificate TLS validation described under [Device Onboarding](#device-onboarding); it does not identify or affect which certificate file is managed on the camera
+- Inventory always reports this certificate to Command with a fixed Alias of `HTTPS`, regardless of Store Path or the job-configuration Alias field above
 
 > [!IMPORTANT]
 > The camera may take several minutes to reboot and become reachable again. During this time, API calls (such as Inventory jobs) will fail because the device is temporarily unavailable.
