@@ -11,7 +11,7 @@
   "release_project":"MobotixIPCamera\\MobotixIPCamera.csproj",
   "about": {
     "orchestrator": {
-      "UOFramework": "25.4",
+      "UOFramework": "25.1",
       "keyfactor_platform_version": "25.4",
       "pam_support": true,
       "store_types": [

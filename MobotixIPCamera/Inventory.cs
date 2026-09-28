@@ -125,7 +125,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera
                     Certificates =  cert.CertChainAsPem,
                     ItemStatus = OrchestratorInventoryItemStatus.Unknown,
                     PrivateKeyEntry = true, // Client certs will have private keys on the camera
-                    UseChainLevel = true // TODO: Check this --- Will only ever have 1 single cert
+                    UseChainLevel = true 
                 };
 
                 _logger.MethodExit();

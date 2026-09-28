@@ -145,7 +145,7 @@ Operational behavior:
 
 As of Keyfactor Command v25.4, Subject Alternative Names (SANs) can be specified for ODKG jobs. Support for passing SANs to the orchestrator also requires, at minimum, Keyfactor Universal Orchestrator v25.1.
 
-The Mobotix API only supports DNS and IP SAN types. Any other SAN types included in the ODKG job will be ignored and will not be added to the enrolled certificate. SANs are not automatically added if none are supplied.
+This integration supports DNS, IP, and URI SAN types. Any other SAN type included in the ODKG job stops the job before a certificate is requested, rather than being silently dropped from the enrolled certificate. SANs are not automatically added if none are supplied.
 
 ## Troubleshooting
 
@@ -153,13 +153,20 @@ _No known troubleshooting guidance available at this time._
 
 ## Operational Notes
 
-_No known operational limitations or version-specific notes at this time._
+Only the end-entity (leaf) certificate is inventoried and enrolled by this integration - intermediate and root
+certificates in the issuing chain are not automatically retrieved or bundled. If the leaf's issuing intermediate
+and root certificates are separately present in Command (for example, imported independently), Command can still
+build and display the complete chain for that certificate. This applies to both Inventory and Reenrollment
+(ODKG) jobs.
 
 ## Release Notes
 
 **1.0.0**
+- Initial Public Version.
 - Improved HTTP communication diagnostics to improve troubleshooting of camera connectivity and communication issues.
 - Updated ODKG job initialization to align with the other jobs.
 - Removed an unnecessary dependency path that could prevent the ODKG job loading in certain environments.
 - Added support for PAM credential retrieval.
-- Initial Public Version.
+- Added `Use SSL` and `Bypass TLS Validation` certificate store properties, including support for validating a factory-fresh camera's certificate and reporting specific TLS validation failure reasons.
+- Added support for URI Subject Alternative Names, in addition to DNS and IP; unsupported SAN types now stop the enrollment job with a clear error instead of being silently dropped.
+- Fixed issues where Inventory could report zero certificates without failing, and where enabling Bypass TLS Validation could cause an unexpected error retrieving the camera's certificate.

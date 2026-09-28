@@ -56,6 +56,11 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
                 throw new ArgumentException("Subject cannot be null or empty", nameof(request.Subject));
             }
 
+            if (request.SANs?.Count > 0)
+            {
+                SANBuilder.ApplyCameraSanTypeLimitations(request.SANs, _logger);
+            }
+
             AsymmetricAlgorithm key;
             CertificateRequest certRequest;
             
@@ -95,7 +100,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
             if (request.SANs?.Count > 0)
             {
                 _logger.LogTrace("Adding Subject Alternative Names to CSR");
-                
+
                 var sanBuilder = new SubjectAlternativeNameBuilder();
 
                 foreach (var entry in request.SANs)
@@ -120,10 +125,6 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
                                 break;
                             case "URI":
                                 sanBuilder.AddUri(new Uri(value));
-                                break;
-                            case "EMAIL":
-                            case "RFC822":
-                                sanBuilder.AddEmailAddress(value);
                                 break;
                             default:
                                 _logger.LogWarning($"Unsupported SAN type skipped: {type}");

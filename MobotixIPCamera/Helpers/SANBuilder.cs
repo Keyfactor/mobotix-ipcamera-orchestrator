@@ -36,11 +36,10 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
             foreach (var entry in sans)
             {
                 string key = NormalizeSanKey(entry.Key);
-                
-                // TODO: Any certificate constraint for Mobotix TLS cert, put here ---
-                if (key is not ("DNS" or "IP"))
+
+                if (key is not ("DNS" or "IP" or "URI"))
                     continue;
-                
+
                 if (entry.Value == null || entry.Value.Length == 0)
                     continue;
                 
@@ -73,12 +72,8 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
             foreach (var entry in sans)
             {
                 string key = NormalizeSanKey(entry.Key);
-                
-                // TODO: Any certificate constraint for Mobotix TLS cert, put here ---
-                if (key is not ("DNS" or "IP"))
-                    continue;
-                
-                if (entry.Value == null || entry.Value.Length == 0)
+
+                if (entry.Value.Length == 0)
                     continue;
 
                 normalized[key] = entry.Value
@@ -91,6 +86,28 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
 
         }
 
+        // SAN types this integration currently supports enrolling on Mobotix cameras. Not a limitation
+        // of the camera itself - the camera's upload API never inspects certificate contents at all -
+        // this is purely a scope decision for what this integration builds into the CSR.
+        private static readonly HashSet<string> SupportedSanTypes = new(StringComparer.OrdinalIgnoreCase) { "DNS", "IP", "URI" };
+
+        /// <summary>
+        /// Rejects any SAN type outside what this integration currently supports for Mobotix cameras.
+        /// Unsupported types are not silently dropped - this throws so CSR generation fails outright,
+        /// rather than issuing a certificate missing a SAN the caller explicitly requested.
+        /// </summary>
+        public static void ApplyCameraSanTypeLimitations(IDictionary<string, string[]> sans, ILogger logger)
+        {
+            foreach (var key in sans.Keys)
+            {
+                if (!SupportedSanTypes.Contains(key))
+                {
+                    logger.LogWarning($"Unsupported SAN type for this integration: {key}");
+                    throw new ArgumentException($"Unsupported SAN type: {key}");
+                }
+            }
+        }
+
         /// <summary>
         /// Normalize SAN type keys to RFC-compliant names.
         /// Courtesy of B.Pokorny.
@@ -101,6 +118,7 @@ namespace Keyfactor.Extensions.Orchestrator.MobotixIPCamera.Helpers
             {
                 "dns" => "DNS",
                 "ip" or "ip4" or "ip6" => "IP",
+                "uri" => "URI",
                 _ => key.ToLower() // default
             };
         }
