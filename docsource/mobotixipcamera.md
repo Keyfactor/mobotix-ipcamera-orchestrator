@@ -9,13 +9,5 @@ The default certificate installed on the camera is the factory device ID certifi
 
 ## Requirements
 
-1. A user Account with \'Administrator\' privileges (Basic Authentication)
+1. A user Account with \'Administrator\' privileges
 2. Camera IP address (and possible port number)
-
-
-> [!NOTE]
-> As of Keyfactor Command v25.4, SANs can be provided for a Reenrollment (ODKG) job.
-> You must also have installed, at minimum, the Keyfactor Universal Orchestator v25.1
-> in order for the SANs to be sent to the orchestrator.
->
-> The Mobotix API supports only DNS and IP SANs. Other SAN types will be ignored
